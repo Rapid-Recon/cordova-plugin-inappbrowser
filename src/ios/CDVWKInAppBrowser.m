@@ -26,6 +26,9 @@
 #import <Cordova/CDVPluginResult.h>
 #import <Cordova/CDVUserAgentUtil.h>
 
+#define  kbuttonClickedEvent @"buttonClicked"
+
+
 #define    kInAppBrowserTargetSelf @"_self"
 #define    kInAppBrowserTargetSystem @"_system"
 #define    kInAppBrowserTargetBlank @"_blank"
@@ -596,6 +599,17 @@ static CDVWKInAppBrowser* instance = nil;
     }
 }
 
+- (NSString *)addMyClickCallbackJS {
+    NSString *js = @"javascript: \
+        function myClick(event){ \
+            var messgeToPost = {'id':event.target.id}; \
+            window.webkit.messageHandlers.buttonClicked.postMessage(messgeToPost); \
+        }\
+        document.addEventListener(\"click\",myClick,true);";
+
+    return js;
+}
+
 #pragma mark WKScriptMessageHandler delegate
 - (void)userContentController:(nonnull WKUserContentController *)userContentController didReceiveScriptMessage:(nonnull WKScriptMessage *)message {
     
@@ -605,20 +619,30 @@ static CDVWKInAppBrowser* instance = nil;
         NSDictionary* messageContent = (NSDictionary*) message.body;
         NSString* scriptCallbackId = messageContent[@"id"];
         
-        if([messageContent objectForKey:@"d"]){
-            NSString* scriptResult = messageContent[@"d"];
-            NSError* __autoreleasing error = nil;
-            NSData* decodedResult = [NSJSONSerialization JSONObjectWithData:[scriptResult dataUsingEncoding:NSUTF8StringEncoding] options:kNilOptions error:&error];
-            if ((error == nil) && [decodedResult isKindOfClass:[NSArray class]]) {
-                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:(NSArray*)decodedResult];
-            } else {
-                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_JSON_EXCEPTION];
-            }
+        if ([message.name isEqualToString:kbuttonClickedEvent]) {
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                         messageAsDictionary:@{@"type":@"click", @"id":message.body[@"id"]}];
+            [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
         } else {
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:@[]];
+            if([messageContent objectForKey:@"d"]){
+                NSString* scriptResult = messageContent[@"d"];
+                NSError* __autoreleasing error = nil;
+                NSData* decodedResult = [NSJSONSerialization JSONObjectWithData:[scriptResult dataUsingEncoding:NSUTF8StringEncoding] options:kNilOptions error:&error];
+                if ((error == nil) && [decodedResult isKindOfClass:[NSArray class]]) {
+                        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:(NSArray*)decodedResult];
+                } else {
+                        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_JSON_EXCEPTION];
+                }
+            } else {
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:@[]];
+            }
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:scriptCallbackId];
+            
         }
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:scriptCallbackId];
-    }else if(self.callbackId != nil){
+        
+
+    } else if(self.callbackId != nil){
         // Send a message event
         NSString* messageContent = (NSString*) message.body;
         NSError* __autoreleasing error = nil;
@@ -656,6 +680,13 @@ static CDVWKInAppBrowser* instance = nil;
         [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
         
         [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+    
+        [theWebView evaluateJavaScript:[self addMyClickCallbackJS] completionHandler:^(id result, NSError *error) {
+              if (!error)
+              {
+                  NSLog(@"evaluateJavaScript error : %@", error.localizedDescription);
+              }
+        }];
     }
 }
 
@@ -774,7 +805,7 @@ BOOL isExiting = FALSE;
         configuration.mediaPlaybackRequiresUserAction = _browserOptions.mediaplaybackrequiresuseraction;
     }
     
-    
+    [configuration.userContentController addScriptMessageHandler:self name:kbuttonClickedEvent];
 
     self.webView = [[WKWebView alloc] initWithFrame:webViewBounds configuration:configuration];
     
@@ -1249,8 +1280,9 @@ BOOL isExiting = FALSE;
 
 #pragma mark WKScriptMessageHandler delegate
 - (void)userContentController:(nonnull WKUserContentController *)userContentController didReceiveScriptMessage:(nonnull WKScriptMessage *)message {
-    if (![message.name isEqualToString:IAB_BRIDGE_NAME]) {
-        return;
+    if (![message.name isEqualToString:IAB_BRIDGE_NAME] &&
+          ![message.name isEqualToString:kbuttonClickedEvent]) {
+          return;
     }
     //NSLog(@"Received script message %@", message.body);
     [self.navigationDelegate userContentController:userContentController didReceiveScriptMessage:message];

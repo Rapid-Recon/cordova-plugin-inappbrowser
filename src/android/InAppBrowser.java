@@ -1118,6 +1118,30 @@ public class InAppBrowser extends CordovaPlugin {
         return mHandler;
     }
 
+    private String addMyClickCallBackJs() {
+        String js = "";
+        js += "function myClick(event){" +
+                "jsListener.myCl(event.target.id)}";
+        js += "document.addEventListener(\"click\",myClick, true);";
+        return js;
+    }
+
+    class MyJsToAndroid {
+
+        @JavascriptInterface
+        public void myCl(String id) {
+            Log.d("TAG", "myClick-> " + id);
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("type", CLICK_EVENT);
+                obj.put("id", id);
+                sendUpdate(obj, true, PluginResult.Status.OK);
+            } catch (JSONException ex) {
+                Log.d(LOG_TAG, "Should never happen");
+            }
+        }
+    }
+
 
     /**
      * Create a new plugin success result and send it back to JavaScript
@@ -1537,30 +1561,6 @@ public class InAppBrowser extends CordovaPlugin {
 
             // By default handle 401 like we'd normally do!
             super.onReceivedHttpAuthRequest(view, handler, host, realm);
-        }
-
-        private String addMyClickCallBackJs() {
-            String js = "";
-            js += "function myClick(event){" +
-                    "jsListener.myCl(event.target.id)}";
-            js += "document.addEventListener(\"click\",myClick, true);";
-            return js;
-        }
-
-        class MyJsToAndroid {
-
-            @JavascriptInterface
-            public void myCl(String id) {
-                Log.d("TAG", "myClick-> " + id);
-                try {
-                    JSONObject obj = new JSONObject();
-                    obj.put("type", CLICK_EVENT);
-                    obj.put("id", id);
-                    sendUpdate(obj, true, PluginResult.Status.OK);
-                } catch (JSONException ex) {
-                    Log.d(LOG_TAG, "Should never happen");
-                }
-            }
         }
 
     }
